@@ -62,6 +62,10 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
     seen_ids = set()
 
     for message in sorted_mails:
+
+        if not message['subject']:
+            continue
+
         messageobj = []
 
         # Very rarely (happened to me with only 1 message out of 25,000),
