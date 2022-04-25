@@ -112,7 +112,7 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             # Seemingly all of these messages use quoted-printable encoding,
             # even though 'Content-Transfer-Encoding' is never set.
             payload = quopri.decodestring(payload)
-            payload = payload.decode('utf-8')
+            payload = payload.decode('utf-8', errors='replace')
             # The emails have a couple of chaff lines before the XML starts
             payload = re.sub(r'^[^<]*<', "<", payload)
 
