@@ -7,7 +7,7 @@ import xml.dom.minidom
 import HTMLParser
 import argparse
 import hangouts
-from email.utils import parsedate
+from email.utils import parsedate, parsedate_tz, mktime_tz
 import quopri
 
 def extract_date_mbox(email):
@@ -135,6 +135,11 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
                 outline = "%s <%s> %s\n" % (timestamp, speaker, content)
                 messageobj.append(outline.encode('utf-8'))
 
+        # convert message date field to a local time and separate chats with this info
+        chat_date = time.strftime(timestamp_format, time.localtime(mktime_tz(parsedate_tz(message['Date']))))
+        message_header = '\nChat dated ' + chat_date
+        message_header += '\n-------------------------------------------------------\n'
+        write_to_file("%s.txt" % filename_sanitize(name)[:250], message_header)
         write_to_file("%s.txt" % filename_sanitize(name)[:250], messageobj)
 
 def parse_json(json_path, name, email, timestamp_format):
