@@ -37,7 +37,7 @@ def write_to_file(filename, lines):
     @type filename: string
     @param lines: array of log lines (strings) to write
     @type lines: [string, string, ...]
-    
+
     '''
     with open(filename, "a") as myfile:
             myfile.write("".join(lines))
@@ -100,8 +100,11 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             if not name:
                 name = to_name if to_name != my_name else from_name
             rawtimestr = message.get('Date')
+            if not rawtimestr:
+                print('Found broken message with no Date field from ' + message['From'])
+                continue
             timestamp = time.strftime(timestamp_format, parsedate(rawtimestr))
-            
+
             pars = HTMLParser.HTMLParser()
             outline = "%s <%s> %s\n" % (timestamp, from_name, pars.unescape(payload))
             messageobj.append(outline.encode('utf-8'))
@@ -117,7 +120,7 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             payload = re.sub(r'^[^<]*<', "<", payload)
 
             chatxml = xml.dom.minidom.parseString(payload.encode('utf-8'))
-            
+
             for messagexml in chatxml.getElementsByTagName("cli:message"):
                 speaker = messagexml.getAttribute("from")
                 rawtimestr = messagexml.getElementsByTagName("time")[0].getAttribute("ms")
@@ -136,7 +139,11 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
                 messageobj.append(outline.encode('utf-8'))
 
         # convert message date field to a local time and separate chats with this info
-        chat_date = time.strftime(timestamp_format, time.localtime(mktime_tz(parsedate_tz(message['Date']))))
+        chat_date = '???'
+        if message['Date']:
+            chat_date = time.strftime(timestamp_format, time.localtime(mktime_tz(parsedate_tz(message['Date']))))
+        elif message['Received']:
+            chat_date = message['Received'].split(';')[-1].strip()
         message_header = '\nChat dated ' + chat_date
         message_header += '\n-------------------------------------------------------\n'
         write_to_file("%s.txt" % filename_sanitize(name)[:250], message_header)
@@ -183,8 +190,7 @@ parser.add_argument("-t", "--timestamp-format",
                     help="Timestamp format to display in output logs")
 parser.add_argument("-m", "--mbox",
                     action='store_true',
-                    help="Use mbox instead of Maildir")                    
-                    
+                    help="Use mbox instead of Maildir")
 
 args = parser.parse_args()
 
