@@ -63,9 +63,6 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
 
     for message in sorted_mails:
 
-        if not message['subject']:
-            continue
-
         messageobj = []
 
         # Very rarely (happened to me with only 1 message out of 25,000),
@@ -81,7 +78,10 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             continue
         seen_ids.add(message['Message-ID'])
 
-        name = re.sub("Chat with ", "", message['subject'])
+        # Takeout mbox does not always have subject field!
+        name = None
+        if message['subject']:
+            name = re.sub("Chat with ", "", message['subject'])
 
         payload = message.get_payload()
         if type(payload) is str:
@@ -95,10 +95,15 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
                 payload = quopri.decodestring(payload)
                 payload = payload.decode('utf-8')
             payload = payload.strip()
-            to_name = re.sub(" <[^>]*>", "", message.get('To'))
-            from_name = re.sub(" <[^>]*>", "", message.get('From'))
+            to_name = None
+            from_name = None
+            if message['To']:
+                to_name = re.sub(" <[^>]*>", "", message.get('To'))
+            if message['From']:
+                from_name = re.sub(" <[^>]*>", "", message.get('From'))
             if not name:
                 name = to_name if to_name != my_name else from_name
+
             rawtimestr = message.get('Date')
             if not rawtimestr:
                 print('Found broken message with no Date field from ' + message['From'])
@@ -112,6 +117,7 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             #We're in an old Google Talk Jabber conversation message
 
             payload = payload[0].as_string()
+
             # Seemingly all of these messages use quoted-printable encoding,
             # even though 'Content-Transfer-Encoding' is never set.
             payload = quopri.decodestring(payload)
@@ -119,15 +125,27 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             # The emails have a couple of chaff lines before the XML starts
             payload = re.sub(r'^[^<]*<', "<", payload)
 
-            chatxml = xml.dom.minidom.parseString(payload.encode('utf-8'))
+            try:
+                chatxml = xml.dom.minidom.parseString(payload.encode('utf-8'))
+            except:
+                # this may break on things like URLs with '=' in messages
+                # can try replacing them with encoding (e.g., %3D)
+                print(payload.encode('utf-8'))
+                sys.exit("Error parsing xml")
 
-            for messagexml in chatxml.getElementsByTagName("cli:message"):
+            # for messagexml in chatxml.getElementsByTagName("cli:message"):
+            for messagexml in chatxml.getElementsByTagNameNS("*", "message"):
                 speaker = messagexml.getAttribute("from")
+                if not speaker:
+                    print(messagexml)
+                if not name:
+                    name = speaker
                 rawtimestr = messagexml.getElementsByTagName("time")[0].getAttribute("ms")
                 timefloat = float(rawtimestr[:-3] + "." + rawtimestr[-3:])
                 timestamp = time.strftime(timestamp_format,time.localtime(timefloat))
                 try:
-                    content = messagexml.getElementsByTagName("cli:body")[0].firstChild.data
+                    # content = messagexml.getElementsByTagName("cli:body")[0].firstChild.data
+                    content = messagexml.getElementsByTagNameNS("*", "body")[0].firstChild.data
                 except AttributeError:
                     # No 'data' element means that it's an empty message
                     content = ""
