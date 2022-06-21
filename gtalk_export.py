@@ -78,10 +78,7 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             continue
         seen_ids.add(message['Message-ID'])
 
-        # Takeout mbox does not always have subject field!
-        name = None
-        if message['subject']:
-            name = re.sub("Chat with ", "", message['subject'])
+        name = get_chat_name(message, my_name, my_email)
 
         payload = message.get_payload()
         if type(payload) is str:
@@ -95,15 +92,6 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
                 payload = quopri.decodestring(payload)
                 payload = payload.decode('utf-8')
             payload = payload.strip()
-            to_name = None
-            from_name = None
-            if message['To']:
-                to_name = re.sub(" <[^>]*>", "", message.get('To'))
-            if message['From']:
-                from_name = re.sub(" <[^>]*>", "", message.get('From'))
-            if not name:
-                name = to_name if to_name != my_name else from_name
-
             rawtimestr = message.get('Date')
             if not rawtimestr:
                 print('Found broken message with no Date field from ' + message['From'])
@@ -114,7 +102,7 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             outline = "%s <%s> %s\n" % (timestamp, from_name, pars.unescape(payload))
             messageobj.append(outline.encode('utf-8'))
         else:
-            #We're in an old Google Talk Jabber conversation message
+            # We're in an old Google Talk Jabber conversation message
 
             payload = payload[0].as_string()
 
@@ -136,10 +124,6 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
             # for messagexml in chatxml.getElementsByTagName("cli:message"):
             for messagexml in chatxml.getElementsByTagNameNS("*", "message"):
                 speaker = messagexml.getAttribute("from")
-                if not speaker:
-                    print(messagexml)
-                if not name:
-                    name = speaker
                 rawtimestr = messagexml.getElementsByTagName("time")[0].getAttribute("ms")
                 timefloat = float(rawtimestr[:-3] + "." + rawtimestr[-3:])
                 timestamp = time.strftime(timestamp_format,time.localtime(timefloat))
@@ -166,6 +150,27 @@ def parse_mailbox(mailbox_path, my_name, my_email, timestamp_format, use_mbox):
         message_header += '\n-------------------------------------------------------\n'
         write_to_file("%s.txt" % filename_sanitize(name)[:250], message_header)
         write_to_file("%s.txt" % filename_sanitize(name)[:250], messageobj)
+
+
+def get_chat_name(message, my_name, my_email):
+    """ Find the best match for the name of other chat participant."""
+
+    # Takeout mbox does not always have subject field!
+    name = None
+    if message['subject']:
+        return re.sub("Chat with ", "", message['subject'])
+
+    if message['From']:
+        return re.sub(" <[^>]*>", "", message.get('From'))
+
+    if message['To']:
+        to_name = re.sub(" <[^>]*>", "", message.get('To'))
+        if to_name != my_name and to_name != my_email:
+            return to_name
+
+    print("Unknown chat name!")
+    return "Unknown"
+
 
 def parse_json(json_path, name, email, timestamp_format):
     with open(json_path, "r") as myfile:
